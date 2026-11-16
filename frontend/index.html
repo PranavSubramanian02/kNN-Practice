@@ -1,0 +1,268 @@
+<!doctype html>
+<html lang="en" data-theme="dark">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>European Striker kNN Similarity Analytics</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Barlow+Semi+Condensed:ital,wght@0,600;0,700;0,800;1,700&family=Plus+Jakarta+Sans:wght@400;500;600;700;800&family=JetBrains+Mono:wght@500;600;700&display=swap"
+      rel="stylesheet"
+    />
+    <link rel="stylesheet" href="styles.css" />
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <script src="app.js" defer></script>
+  </head>
+  <body>
+    <div class="app-container">
+      <!-- Header with Brand & Technical Theme Switcher (No Emojis) -->
+      <header class="app-header">
+        <div class="header-top-bar">
+          <div class="brand-block">
+            <span class="brand-tag">UEFA TOP-5 &bull; 2026/27 SCOUTING SUITE</span>
+            <h1>European Top-5 Striker Analytics</h1>
+          </div>
+          <div class="theme-switch-wrapper" role="radiogroup" aria-label="Theme Switcher">
+            <button id="theme-btn-dark" class="theme-btn active" type="button" aria-pressed="true">
+              DARK
+            </button>
+            <button id="theme-btn-light" class="theme-btn" type="button" aria-pressed="false">
+              LIGHT
+            </button>
+          </div>
+        </div>
+
+        <!-- Search & Autocomplete -->
+        <div class="search-container">
+          <label for="striker-search" class="search-label"
+            >Select or Search European Striker (141 Strikers in Pool):</label
+          >
+          <div class="search-box-wrapper">
+            <svg class="search-icon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <circle cx="11" cy="11" r="8"></circle>
+              <line x1="21" y1="21" x2="16.65" y2="16.65"></line>
+            </svg>
+            <input
+              type="text"
+              id="striker-search"
+              placeholder="Type striker name (e.g. Erling Haaland, Lois Openda, Harry Kane)..."
+              autocomplete="off"
+            />
+            <div id="autocomplete-list" class="autocomplete-dropdown"></div>
+          </div>
+          <div class="quick-select-pills" id="quick-pills">
+            <span class="pills-label">Quick Compare:</span>
+            <button class="pill-btn active" data-player="Donyell Malen">
+              DONYELL MALEN (#1 PEER)
+            </button>
+            <button class="pill-btn" data-player="Raphinha">
+              RAPHINHA
+            </button>
+            <button class="pill-btn" data-player="Erling Haaland">
+              ERLING HAALAND
+            </button>
+            <button class="pill-btn" data-player="Harry Kane">
+              HARRY KANE
+            </button>
+            <button class="pill-btn" data-player="Viktor Gyokeres">
+              VIKTOR GYOKERES
+            </button>
+            <button class="pill-btn" data-player="Alexander Isak">
+              ALEXANDER ISAK
+            </button>
+            <button class="pill-btn" data-player="Lois Openda">
+              LOIS OPENDA
+            </button>
+          </div>
+        </div>
+      </header>
+
+      <!-- Sharp Player Profile Dossiers -->
+      <section class="players-banner">
+        <div class="player-card benchmark-card">
+          <span class="card-badge benchmark-badge">[BENCHMARK STRIKER]</span>
+          <div class="player-info">
+            <h2 id="target-name">Kylian Mbappe</h2>
+            <p id="target-meta" class="meta-tag">
+              Real Madrid &bull; La Liga &bull; ST
+            </p>
+            <div class="player-stat-badges">
+              <span class="stat-pill">GOALS: <strong id="target-goals">17</strong></span>
+              <span class="stat-pill">ASSISTS: <strong id="target-assists">3</strong></span>
+            </div>
+          </div>
+        </div>
+
+        <div class="vs-badge">VS</div>
+
+        <div class="player-card competitor-card">
+          <span class="card-badge competitor-badge">[COMPARISON STRIKER]</span>
+          <div class="player-info">
+            <h2 id="comp-name">Donyell Malen</h2>
+            <p id="comp-meta" class="meta-tag">
+              AS Roma &bull; Serie A &bull; ST/RW
+            </p>
+            <div class="player-stat-badges comp-badges">
+              <span class="stat-pill">GOALS: <strong id="comp-goals">12</strong></span>
+              <span class="stat-pill">ASSISTS: <strong id="comp-assists">5</strong></span>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- Sharp KPI Summary Cards (Cyan & Slate - No Green / No Yellow) -->
+      <section class="kpi-grid">
+        <div class="kpi-card">
+          <div class="kpi-header">
+            <span class="kpi-label">EUCLIDEAN DISTANCE</span>
+          </div>
+          <div class="kpi-value" id="val-distance">3.6675</div>
+          <span class="kpi-sub">Across 15 standardized metrics</span>
+        </div>
+
+        <div class="kpi-card">
+          <div class="kpi-header">
+            <span class="kpi-label">SIMILARITY INDEX</span>
+          </div>
+          <div class="kpi-value highlight-sim" id="val-similarity">21.4%</div>
+          <span class="kpi-sub">Normalized kNN playstyle match</span>
+        </div>
+
+        <div class="kpi-card kpi-card-match">
+          <div class="kpi-header">
+            <span class="kpi-label">CLOSEST PLAYSTYLE MATCH</span>
+            <span class="kpi-chip chip-match">TOP MATCH</span>
+          </div>
+          <div class="kpi-metric-title" id="val-closest-label">
+            Aerial Duels Won (%)
+          </div>
+        </div>
+
+        <div class="kpi-card kpi-card-contrast">
+          <div class="kpi-header">
+            <span class="kpi-label">BIGGEST TACTICAL CONTRAST</span>
+            <span class="kpi-chip chip-contrast">TOP CONTRAST</span>
+          </div>
+          <div class="kpi-metric-title" id="val-farthest-label">
+            Touches in Attacking Penalty Area / 90
+          </div>
+        </div>
+      </section>
+
+      <!-- Sharp 2D PCA European Cluster Map -->
+      <section class="pca-section">
+        <div class="section-header">
+          <h3>2D PCA European Striker Landscape</h3>
+          <p>
+            Dimensionality reduction of all 15 performance metrics across all
+            141 European top-5 league strikers. Hover over any dot to view details.
+          </p>
+        </div>
+        <div class="pca-card">
+          <div class="pca-legend">
+            <span class="legend-item"
+              ><span class="dot target-dot"></span>
+              <span id="pca-legend-target">KYLIAN MBAPPE</span></span
+            >
+            <span class="legend-item"
+              ><span class="dot comp-dot"></span>
+              <span id="pca-legend-comp">LOIS OPENDA</span></span
+            >
+            <span class="legend-item"
+              ><span class="dot other-dot"></span> ALL OTHER 139 STRIKERS</span
+            >
+          </div>
+          <div class="pca-chart-wrapper">
+            <canvas id="pcaChart"></canvas>
+          </div>
+        </div>
+      </section>
+
+      <!-- Sharp 2x2 Category Radars Grid -->
+      <section class="radars-section">
+        <div class="section-header">
+          <h3>Category Performance Radars (0–100 Percentile Ranks)</h3>
+          <p>
+            Multi-dimensional percentile profiling against 141 European top-5 league center-forwards.
+          </p>
+        </div>
+
+        <div class="radars-grid">
+          <div class="radar-card">
+            <div class="radar-card-header">
+              <h4>Shooting Efficiency &amp; Quality</h4>
+              <span class="metric-count">5 METRICS</span>
+            </div>
+            <div class="chart-wrapper">
+              <canvas id="radarShooting"></canvas>
+            </div>
+          </div>
+
+          <div class="radar-card">
+            <div class="radar-card-header">
+              <h4>Build-up Play &amp; Linkage</h4>
+              <span class="metric-count">4 METRICS</span>
+            </div>
+            <div class="chart-wrapper">
+              <canvas id="radarBuildup"></canvas>
+            </div>
+          </div>
+
+          <div class="radar-card">
+            <div class="radar-card-header">
+              <h4>Ball Carrying &amp; Space Creation</h4>
+              <span class="metric-count">3 METRICS</span>
+            </div>
+            <div class="chart-wrapper">
+              <canvas id="radarCarrying"></canvas>
+            </div>
+          </div>
+
+          <div class="radar-card">
+            <div class="radar-card-header">
+              <h4>Defensive Work Rate &amp; Pressing</h4>
+              <span class="metric-count">3 METRICS</span>
+            </div>
+            <div class="chart-wrapper">
+              <canvas id="radarDefending"></canvas>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- Sharp Head-to-Head 15-Metric Comparison Table -->
+      <section class="table-section">
+        <div class="section-header">
+          <h3>Head-to-Head Statistical Matrix</h3>
+          <p>
+            Detailed per-90 statistics across Europe's Top 5 Leagues (2026/27).
+          </p>
+        </div>
+        <div class="table-responsive">
+          <table class="comparison-table">
+            <thead>
+              <tr>
+                <th>METRIC / PERFORMANCE STAT</th>
+                <th>CATEGORY</th>
+                <th id="th-target">KYLIAN MBAPPE</th>
+                <th id="th-comp">LOIS OPENDA</th>
+                <th>DELTA</th>
+                <th>ADVANTAGE</th>
+              </tr>
+            </thead>
+            <tbody id="comparison-table-body"></tbody>
+          </table>
+        </div>
+      </section>
+
+      <!-- Footer -->
+      <footer class="app-footer">
+        <p>
+          European Top-5 Striker kNN Analytics Pipeline &bull; Season 2026/27
+          (Normalized Per 90) &bull; Built with Python, Flask, &amp; Chart.js
+        </p>
+      </footer>
+    </div>
+  </body>
+</html>
