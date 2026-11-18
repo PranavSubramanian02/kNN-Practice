@@ -1,6 +1,7 @@
 // European Striker kNN Analytics Application Engine
 
 // Global State
+let analyticsData = null;
 let allPlayers = [];
 let currentBenchmark = "Kylian Mbappe";
 let currentCompetitor = "Donyell Malen";
@@ -65,14 +66,157 @@ function setTheme(theme) {
   }
 }
 
-// API Fetching
+// Name Normalization & Client-Side kNN Engine
+function normalizeName(text) {
+  if (typeof text !== "string") return "";
+  return text
+    .normalize("NFKD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .replace(/[øØ]/g, "o")
+    .replace(/[đĐ]/g, "d")
+    .replace(/ß/g, "ss")
+    .trim()
+    .toLowerCase();
+}
+
+function roundTo(value, decimals) {
+  const factor = 10 ** decimals;
+  return Math.round((value + Number.EPSILON) * factor) / factor;
+}
+
+function findPlayerIndex(queryName) {
+  const cleanQuery = normalizeName(queryName);
+  const exactIdx = analyticsData.players.findIndex(
+    (p) => p.search_name === cleanQuery,
+  );
+  if (exactIdx !== -1) return exactIdx;
+  const partialIdx = analyticsData.players.findIndex((p) =>
+    p.search_name.includes(cleanQuery),
+  );
+  if (partialIdx === -1) {
+    throw new Error(`Player '${queryName}' was not found in dataset.`);
+  }
+  return partialIdx;
+}
+
+function computeComparison(competitorName, benchmarkName) {
+  const { features, feature_labels: featureLabels, categories, players } = analyticsData;
+  const targetIdx = findPlayerIndex(benchmarkName);
+  const compIdx = findPlayerIndex(competitorName);
+  const target = players[targetIdx];
+  const comp = players[compIdx];
+
+  const featureIndex = Object.fromEntries(features.map((f, i) => [f, i]));
+
+  // Standardized Euclidean distance and per-feature z-score deltas
+  let sumSq = 0;
+  let closestIdx = 0;
+  let farthestIdx = 0;
+  const zDiffs = features.map((_, i) => {
+    const diff = target.z[i] - comp.z[i];
+    sumSq += diff * diff;
+    return Math.abs(diff);
+  });
+
+  for (let i = 1; i < zDiffs.length; i++) {
+    if (zDiffs[i] < zDiffs[closestIdx]) closestIdx = i;
+    if (zDiffs[i] > zDiffs[farthestIdx]) farthestIdx = i;
+  }
+
+  const dist = Math.sqrt(sumSq);
+  const simPct = (1.0 / (1.0 + dist)) * 100;
+
+  const buildExtremeMetric = (idx) => {
+    const feat = features[idx];
+    return {
+      feature: feat,
+      label: featureLabels[feat] || feat,
+      z_diff: roundTo(zDiffs[idx], 3),
+      target_val: roundTo(target.raw[idx], 2),
+      comp_val: roundTo(comp.raw[idx], 2),
+    };
+  };
+
+  const categoryRadars = {};
+  const comparisonTable = [];
+
+  for (const cat of categories) {
+    categoryRadars[cat.name] = {
+      labels: cat.features.map((f) => featureLabels[f] || f),
+      features: cat.features,
+      target_scores: cat.features.map((f) => target.pct[featureIndex[f]]),
+      competitor_scores: cat.features.map((f) => comp.pct[featureIndex[f]]),
+      target_raw: cat.features.map((f) => roundTo(target.raw[featureIndex[f]], 2)),
+      competitor_raw: cat.features.map((f) => roundTo(comp.raw[featureIndex[f]], 2)),
+    };
+
+    for (const f of cat.features) {
+      const idx = featureIndex[f];
+      const tVal = target.raw[idx];
+      const cVal = comp.raw[idx];
+      comparisonTable.push({
+        category: cat.name,
+        feature: f,
+        label: featureLabels[f] || f,
+        target_value: roundTo(tVal, 2),
+        competitor_value: roundTo(cVal, 2),
+        raw_diff: roundTo(tVal - cVal, 2),
+        z_diff: roundTo(zDiffs[idx], 3),
+        advantage: tVal > cVal ? "target" : cVal > tVal ? "competitor" : "equal",
+      });
+    }
+  }
+
+  const pcaPoints = players.map((p, idx) => ({
+    player: p.player,
+    club: p.club,
+    league: p.league,
+    x: p.pca[0],
+    y: p.pca[1],
+    is_target: idx === targetIdx,
+    is_competitor: idx === compIdx,
+  }));
+
+  const formatDossier = (p) => ({
+    player: p.player,
+    club: p.club,
+    league: p.league,
+    position: p.position,
+    total_goals: p.total_goals,
+    total_assists: p.total_assists,
+    goals_per90: p.goals_per90,
+    assists_per90: p.assists_per90,
+  });
+
+  return {
+    target: formatDossier(target),
+    competitor: formatDossier(comp),
+    euclidean_distance: roundTo(dist, 4),
+    similarity_percentage: roundTo(simPct, 1),
+    closest_metric: buildExtremeMetric(closestIdx),
+    farthest_metric: buildExtremeMetric(farthestIdx),
+    category_radars: categoryRadars,
+    comparison_table: comparisonTable,
+    pca_points: pcaPoints,
+  };
+}
+
+// Static Data Loading
 async function fetchPlayers() {
   try {
-    const res = await fetch("/api/players");
-    if (!res.ok) throw new Error("Failed to load players");
-    allPlayers = await res.json();
+    const res = await fetch("./data.json");
+    if (!res.ok) throw new Error("Failed to load static dataset");
+    analyticsData = await res.json();
+    currentBenchmark = analyticsData.default_benchmark || currentBenchmark;
+    allPlayers = analyticsData.players.map((p) => ({
+      name: p.player,
+      searchName: p.search_name,
+      club: p.club,
+      league: p.league,
+      position: p.position,
+    }));
   } catch (err) {
-    console.error("Error fetching player roster:", err);
+    console.error("Error loading striker dataset:", err);
   }
 }
 
@@ -81,10 +225,8 @@ async function fetchComparison(
   benchmarkName = currentBenchmark,
 ) {
   try {
-    const url = `/api/compare?player=${encodeURIComponent(competitorName)}&benchmark=${encodeURIComponent(benchmarkName)}`;
-    const res = await fetch(url);
-    if (!res.ok) throw new Error("Failed to fetch comparison");
-    const data = await res.json();
+    if (!analyticsData) return;
+    const data = computeComparison(competitorName, benchmarkName);
 
     lastComparisonData = data;
     currentBenchmark = data.target.player;
@@ -92,7 +234,7 @@ async function fetchComparison(
 
     updateUI(data);
   } catch (err) {
-    console.error("Error fetching striker comparison:", err);
+    console.error("Error computing striker comparison:", err);
   }
 }
 
@@ -479,7 +621,7 @@ function setupSearch() {
   const dropdown = document.getElementById("autocomplete-list");
 
   searchInput.addEventListener("input", () => {
-    const query = searchInput.value.trim().toLowerCase();
+    const query = normalizeName(searchInput.value);
     dropdown.innerHTML = "";
 
     if (!query) {
@@ -490,8 +632,8 @@ function setupSearch() {
     const matches = allPlayers
       .filter(
         (p) =>
-          p.name.toLowerCase().includes(query) ||
-          p.club.toLowerCase().includes(query),
+          p.searchName.includes(query) ||
+          normalizeName(p.club).includes(query),
       )
       .slice(0, 8);
 
